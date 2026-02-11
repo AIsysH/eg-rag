@@ -5,35 +5,73 @@ Evaluation metrics for EG-RAG.
 import re
 import json
 import ast
+import string
 from typing import Optional
 
 
-def normalize_answer(s: str) -> str:
-    """Lowercase, strip, and remove punctuation."""
-    return re.sub(r'[^\w\s]', '', s.lower()).strip()
+def normalize_answer(s: str, strict: bool = False) -> str:
+    """
+    Normalize answer string for comparison.
+
+    Args:
+        s: Answer string to normalize
+        strict: If True, use stricter normalization (remove articles, extra spaces)
+
+    Returns:
+        Normalized string
+    """
+    def remove_articles(text):
+        return re.sub(r'\b(a|an|the)\b', ' ', text)
+
+    def white_space_fix(text):
+        return ' '.join(text.split())
+
+    def handle_punc(text):
+        exclude = set(string.punctuation + "\u201c\u201d\u2018\u2019")
+        return ''.join(ch if ch not in exclude else ' ' for ch in text)
+
+    def lower(text):
+        return text.lower()
+
+    if strict:
+        return white_space_fix(remove_articles(handle_punc(lower(s)))).strip()
+    else:
+        return re.sub(r'[^\w\s]', '', s.lower()).strip()
 
 
-def count_matches(true_list: list[str], pred_list: list[str]) -> int:
+def count_matches(
+    true_list: list[str],
+    pred_list: list[str],
+    strict: bool = False
+) -> int:
     """
     Count how many true answers are matched by predictions.
-    Uses case-insensitive, punctuation-agnostic, and substring matching.
 
     Args:
         true_list: Ground truth answers
         pred_list: Predicted answers
+        strict: If True, use exact match after normalization.
+                If False, use substring matching (lenient).
 
     Returns:
         Number of matched answers
     """
-    norm_true = [normalize_answer(t) for t in true_list]
-    norm_pred = [normalize_answer(p) for p in pred_list]
+    norm_true = [normalize_answer(t, strict=strict) for t in true_list]
+    norm_pred = [normalize_answer(p, strict=strict) for p in pred_list]
     matched_indices = set()
 
     for i, t in enumerate(norm_true):
         for p in norm_pred:
-            if p and (p in t or t in p):
-                matched_indices.add(i)
-                break
+            if strict:
+                # Strict: exact match only
+                if p and p == t:
+                    matched_indices.add(i)
+                    break
+            else:
+                # Lenient: substring matching
+                if p and (p in t or t in p):
+                    matched_indices.add(i)
+                    break
     return len(matched_indices)
 
 
@@ -64,7 +102,8 @@ def parse_prediction(pred_str: str) -> list[str]:
 def compute_metrics(
     predictions: list[str],
     ground_truths: list[list[str]],
-    verbose: bool = False
+    verbose: bool = False,
+    strict: bool = False
 ) -> dict:
     """
     Compute evaluation metrics.
@@ -73,6 +112,8 @@ def compute_metrics(
         predictions: List of prediction strings
         ground_truths: List of ground truth answer lists
         verbose: Print per-item metrics
+        strict: If True, use exact match after normalization.
+                If False, use substring matching (lenient).
 
     Returns:
         Dictionary with metrics:
@@ -91,7 +132,7 @@ def compute_metrics(
 
     for i, (pred, true_list) in enumerate(zip(predictions, ground_truths)):
         pred_list = parse_prediction(pred)
-        matched = count_matches(true_list, pred_list)
+        matched = count_matches(true_list, pred_list, strict=strict)
 
         n_true = len(true_list)
         n_pred = len(pred_list)

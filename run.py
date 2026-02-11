@@ -45,9 +45,9 @@ def load_benchmark_dataset(dataset_name: str, num_samples: int = None):
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
     if "config" in config:
-        dataset = load_dataset(config["name"], config["config"], split=config["split"])
+        dataset = load_dataset(config["name"], config["config"], split=config["split"], trust_remote_code=True)
     else:
-        dataset = load_dataset(config["name"], split=config["split"])
+        dataset = load_dataset(config["name"], split=config["split"], trust_remote_code=True)
 
     if num_samples:
         dataset = dataset.select(range(min(num_samples, len(dataset))))
@@ -59,12 +59,20 @@ def format_context(example, config):
     """Format context from dataset example."""
     context_key = config["context_key"]
 
-    if isinstance(example[context_key], list):
-        # HotpotQA format: list of (title, sentences)
+    if isinstance(example[context_key], dict):
+        # HotpotQA format: dict with 'title' and 'sentences' keys
         passages = []
         for title, sentences in zip(example[context_key]["title"], example[context_key]["sentences"]):
             text = " ".join(sentences)
             passages.append(f"Document: {title}\n{text}")
+        return "\n\n".join(passages)
+    elif isinstance(example[context_key], list):
+        passages = []
+        for item in example[context_key]:
+            if isinstance(item, dict):
+                passages.append(f"Document: {item.get('title', '')}\n{item.get('text', '')}")
+            else:
+                passages.append(str(item))
         return "\n\n".join(passages)
     else:
         return example[context_key]

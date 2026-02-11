@@ -85,6 +85,8 @@ Thumbs.db
 logs/
 outputs/
 results/
+!test/results/
+!test/results/*.json
 checkpoints/
 models/
 data/raw/

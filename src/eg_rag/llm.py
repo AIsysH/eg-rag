@@ -58,9 +58,9 @@ class LLMClient:
         # Initialize based on provider
         if self.provider == "openai":
             import openai
-            self.client = openai
-            if api_key:
-                openai.api_key = api_key
+            self.client = openai.OpenAI(
+                api_key=api_key or os.getenv("OPENAI_API_KEY")
+            )
 
         elif self.provider == "anthropic":
             import anthropic
@@ -98,19 +98,19 @@ class LLMClient:
 
         for attempt in range(self.max_retries):
             try:
-                response = openai.ChatCompletion.create(
+                response = self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
                     temperature=self.temperature,
                 )
-                return response.choices[0].message["content"].strip()
+                return response.choices[0].message.content.strip()
 
-            except openai.error.RateLimitError as e:
+            except openai.RateLimitError as e:
                 wait = 2 ** attempt
                 print(f"RateLimitError: retrying in {wait}s...")
                 time.sleep(wait)
 
-            except openai.error.APIError as e:
+            except openai.APIError as e:
                 wait = 2 ** attempt
                 print(f"APIError: retrying in {wait}s...")
                 time.sleep(wait)
